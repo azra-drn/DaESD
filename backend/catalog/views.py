@@ -24,6 +24,8 @@ def product_list_page(request):
     page_obj = paginator.get_page(request.GET.get("page") or 1)
 
     categories = Category.objects.order_by("name")
+    
+    request.session["last_product_list_url"] = request.get_full_path()
 
     return render(
         request,

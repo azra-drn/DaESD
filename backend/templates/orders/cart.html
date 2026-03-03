@@ -46,11 +46,17 @@
   <div class="mt-3">
     <a href="#" class="btn btn-success disabled">Checkout (next step)</a>
   </div>
+  <a href="{{ continue_url }}" class="btn btn-outline-primary">
+  Continue shopping
+</a>
 
 {% else %}
   <div class="alert alert-info">
     Your cart is empty.
   </div>
+   <a href="{{ continue_url }}" class="btn btn-outline-primary">
+  Continue shopping
+</a>
 {% endif %}
 
 {% endblock %}

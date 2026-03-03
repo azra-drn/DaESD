@@ -61,10 +61,11 @@ def _maybe_objectid(value: str):
 
 @login_required
 def cart_page(request):
-    from .models import Cart  # local import to avoid circulars
-
+    from .models import Cart
     cart, _ = Cart.objects.get_or_create(customer=request.user)
-    return render(request, "orders/cart.html", {"cart": cart})
+
+    continue_url = request.session.get("last_product_list_url", "/shop/products/")  # adjust if you use /products/
+    return render(request, "orders/cart.html", {"cart": cart, "continue_url": continue_url})
 
 
 @login_required
