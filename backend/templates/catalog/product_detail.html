@@ -67,7 +67,7 @@
         Stock available: {{ product.stock }}
       </div>
 
-      {% if request.user.is_authenticated and request.user.role == "customer" %}
+      {% if request.user.is_authenticated and request.user.is_customer_user %}
         {% if product.stock > 0 %}
           <form method="POST" action="{% url 'cart_add' product.id %}" class="d-flex gap-2">
             {% csrf_token %}
