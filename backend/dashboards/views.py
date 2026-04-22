@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import F
+from django.db.models import F, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -12,7 +12,7 @@ from .forms import ProducerProductForm
 
 @login_required
 def admin_dashboard(request):
-    if not (request.user.is_staff or getattr(request.user, "role", "") == User.Role.ADMIN):
+    if not request.user.is_admin_user:
         return render(request, "dashboards/forbidden.html", status=403)
 
     total_products = Product.objects.count()
@@ -20,7 +20,9 @@ def admin_dashboard(request):
     total_orders = Order.objects.count()
     total_customers = User.objects.filter(role=User.Role.CUSTOMER).count()
     total_producers = User.objects.filter(role=User.Role.PRODUCER).count()
-    total_admins = User.objects.filter(role=User.Role.ADMIN).count()
+    total_admins = User.objects.filter(
+        Q(role=User.Role.ADMIN) | Q(is_staff=True) | Q(is_superuser=True)
+    ).distinct().count()
 
     context = {
         "display_role": "Admin",
@@ -36,7 +38,7 @@ def admin_dashboard(request):
 
 @login_required
 def customer_dashboard(request):
-    if getattr(request.user, "role", "") != User.Role.CUSTOMER:
+    if not request.user.is_customer_user:
         return redirect("after_login")
 
     user = request.user
@@ -66,7 +68,7 @@ def customer_dashboard(request):
 def _producer_only_or_redirect(request):
     if not request.user.is_authenticated:
         return redirect("login")
-    if getattr(request.user, "role", "") != User.Role.PRODUCER:
+    if not request.user.is_producer_user:
         return redirect("after_login")
     return None
 
@@ -231,4 +233,8 @@ def delete_product(request, product_id):
 
 @login_required
 def add_stock(request, product_id):
+    redirect_response = _producer_only_or_redirect(request)
+    if redirect_response:
+        return redirect_response
+
     return redirect("edit_product", product_id=product_id)

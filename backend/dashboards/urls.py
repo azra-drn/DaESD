@@ -20,7 +20,7 @@ urlpatterns = [
     path("producer/edit-stock-list/", edit_stock_list, name="edit_stock_list"),
 
     path("producer/add-product/", add_product, name="add_product"),
-    path("producer/edit-product/<str:product_id>/", edit_product, name="edit_product"),
-    path("producer/delete-product/<str:product_id>/", delete_product, name="delete_product"),
-    path("producer/add-stock/<str:product_id>/", add_stock, name="add_stock"),
+    path("producer/edit-product/<int:product_id>/", edit_product, name="edit_product"),
+    path("producer/delete-product/<int:product_id>/", delete_product, name="delete_product"),
+    path("producer/add-stock/<int:product_id>/", add_stock, name="add_stock"),
 ]

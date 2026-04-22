@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -8,20 +7,6 @@ from django.views.decorators.http import require_POST
 from accounts.models import User
 from payments.models import PaymentTransaction
 from .models import Order
-
-try:
-    from bson import ObjectId
-except Exception:
-    ObjectId = None
-
-
-def _maybe_objectid(value: str):
-    if ObjectId is None:
-        return value
-    try:
-        return ObjectId(value)
-    except Exception:
-        raise Http404("Invalid id format")
 
 
 def _customer_only_or_redirect(request):
@@ -34,8 +19,7 @@ def _customer_only_or_redirect(request):
 
 @login_required
 def order_detail_page(request, order_id):
-    oid = _maybe_objectid(order_id)
-    order = get_object_or_404(Order, id=oid)
+    order = get_object_or_404(Order, id=order_id)
 
     if order.customer != request.user and not request.user.is_staff and getattr(request.user, "role", "") != User.Role.ADMIN:
         return redirect("after_login")
@@ -49,8 +33,7 @@ def payment_page(request, order_id):
     if redirect_response:
         return redirect_response
 
-    oid = _maybe_objectid(order_id)
-    order = get_object_or_404(Order, id=oid, customer=request.user)
+    order = get_object_or_404(Order, id=order_id, customer=request.user)
 
     if request.method == "POST":
         PaymentTransaction.objects.create(
@@ -104,8 +87,7 @@ def cart_add(request, product_id):
     except Exception:
         qty = 1
 
-    pid = _maybe_objectid(product_id)
-    product = get_object_or_404(Product, id=pid, is_active=True)
+    product = get_object_or_404(Product, id=product_id, is_active=True)
 
     if qty > product.stock:
         messages.error(request, f"Only {product.stock} left in stock for {product.name}.")
@@ -140,8 +122,7 @@ def cart_update(request, item_id):
 
     from .models import CartItem
 
-    iid = _maybe_objectid(item_id)
-    item = get_object_or_404(CartItem, id=iid, cart__customer=request.user)
+    item = get_object_or_404(CartItem, id=item_id, cart__customer=request.user)
 
     qty = request.POST.get("quantity", "1")
     try:
@@ -171,8 +152,7 @@ def cart_remove(request, item_id):
 
     from .models import CartItem
 
-    iid = _maybe_objectid(item_id)
-    item = get_object_or_404(CartItem, id=iid, cart__customer=request.user)
+    item = get_object_or_404(CartItem, id=item_id, cart__customer=request.user)
     item.delete()
     messages.info(request, "Item removed from cart.")
     return redirect("cart_page")
