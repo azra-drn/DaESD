@@ -40,7 +40,7 @@ class CustomerRegistrationForm(BaseRegistrationForm):
     postcode = forms.CharField(max_length=12, required=True)
     organisation_name = forms.CharField(max_length=160, required=False)
     institutional_email = forms.EmailField(required=False)
-    address_line1 = forms.CharField(max_length=120, required=False)
+    address_line1 = forms.CharField(max_length=120, required=True)
 
     class Meta(UserCreationForm.Meta):
         model = User

@@ -87,14 +87,7 @@
         </select>
       </div>
 
-      <div>
-        <label class="form-label">Sort by</label>
-        <select class="form-select" name="sort">
-          {% for value, label in sort_options %}
-            <option value="{{ value }}" {% if value == sort_by %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+
 
       {% if show_postcode_filter %}
         <div>
@@ -158,6 +151,12 @@
               <strong>Availability:</strong>
               <span class="badge text-bg-success">{{ product.get_availability_status_display }}</span>
             </div>
+            {% if product.availability_status == 'in_season' and product.season_months %}
+              <div class="product-meta-row">
+                <strong>Season:</strong>
+                <span>{{ product.season_months }}</span>
+              </div>
+            {% endif %}
 
             <div class="product-meta-row">
               <strong>Producer:</strong>

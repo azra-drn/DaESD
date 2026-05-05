@@ -99,21 +99,6 @@ The test suite covers important flows such as:
 
 If a stale test database already exists and Django asks about deleting it, rerun with a clean database strategy your team agrees on before the demo.
 
-## Useful Demo Accounts
-
-These accounts are created by the `seed_demo` management command:
-
-- Admin:
-  - `admin1 / AdminPass123!`
-- Producers:
-  - `producer1..producer5 / ProducerPass123!`
-- Customers:
-  - `customer1..customer2 / CustomerPass123!`
-- Community group:
-  - `st_marys_school / CustomerPass123!`
-- Restaurant:
-  - `the_clifton_kitchen / CustomerPass123!`
-
 ## Main User Roles
 
 - Admin: manages the platform dashboard, finance reporting, and high-level overview pages

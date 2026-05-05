@@ -14,6 +14,20 @@
 
     <div class="invoice-grid">
       <div class="invoice-meta-card">
+        <span class="label">Producer order status</span>
+        <div class="mt-2">
+          <span class="badge
+            {% if producer_order.status == 'completed' %}bg-success
+            {% elif producer_order.status == 'dispatched' %}bg-info text-dark
+            {% elif producer_order.status == 'pending' %}bg-warning text-dark
+            {% elif producer_order.status == 'accepted' %}bg-info
+            {% elif producer_order.status == 'cancelled' %}bg-danger
+            {% else %}bg-secondary{% endif %}">
+            {{ producer_order.get_status_display }}
+          </span>
+        </div>
+      </div>
+      <div class="invoice-meta-card">
         <span class="label">Delivery date</span>
         <div>{{ producer_order.parent_order.delivery_date|default:"Not specified" }}</div>
       </div>
@@ -22,6 +36,47 @@
         <div>{{ producer_order.parent_order.special_instructions|default:"None" }}</div>
       </div>
     </div>
+
+    {% if request.user == producer_order.producer %}
+      <section class="invoice-section">
+        <div class="d-flex gap-2 flex-wrap">
+          {% if producer_order.status == 'pending' %}
+            <form action="{% url 'update_producer_order_status' producer_order.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="status" value="accepted">
+              <button type="submit" class="btn btn-success">Accept Order</button>
+            </form>
+            <form action="{% url 'update_producer_order_status' producer_order.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="status" value="cancelled">
+              <button type="submit" class="btn btn-danger">Decline Order</button>
+            </form>
+          {% elif producer_order.status == 'accepted' %}
+            <form action="{% url 'update_producer_order_status' producer_order.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="status" value="dispatched">
+              <button type="submit" class="btn btn-secondary">Mark Dispatched</button>
+            </form>
+            <form action="{% url 'update_producer_order_status' producer_order.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="status" value="completed">
+              <button type="submit" class="btn btn-success">Mark Completed</button>
+            </form>
+          {% elif producer_order.status == 'dispatched' %}
+            <form action="{% url 'update_producer_order_status' producer_order.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <input type="hidden" name="status" value="completed">
+              <button type="submit" class="btn btn-success">Mark Completed</button>
+            </form>
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
 
     <section class="invoice-section">
       <div class="table-responsive">

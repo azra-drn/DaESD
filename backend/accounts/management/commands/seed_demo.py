@@ -25,7 +25,7 @@ except Exception:
 
 
 class Command(BaseCommand):
-    help = "Create demo data: users, profiles, catalog, orders, payments, settlements (and optional reviews)."
+    help = "Create demo marketplace data. Transaction and settlement demos can be added separately with --with-transactions."
 
     # Demo passwords (same for everyone so the team can login easily)
     ADMIN_PASSWORD = "AdminPass123!"
@@ -38,9 +38,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete previously seeded demo data first.",
         )
+        parser.add_argument(
+            "--with-transactions",
+            action="store_true",
+            help="Also create demo orders, payments, settlements, and review data.",
+        )
 
     def handle(self, *args, **options):
         reset = options["reset"]
+        include_transactions = options["with_transactions"]
 
         # -------------------------
         # DEMO USERS
@@ -282,7 +288,7 @@ class Command(BaseCommand):
                         "description": "Slow-fermented sourdough loaf baked fresh each morning.",
                         "is_organic": False,
                         "availability": Product.AvailabilityStatus.YEAR_ROUND,
-                        "allergens": ["Gluten"],
+                        "allergens": ["Cereals containing gluten"],
                     },
                     {
                         "name": "Organic Seeded Loaf",
@@ -292,7 +298,7 @@ class Command(BaseCommand):
                         "description": "Certified organic seeded bread containing gluten.",
                         "is_organic": True,
                         "availability": Product.AvailabilityStatus.YEAR_ROUND,
-                        "allergens": ["Gluten"],
+                        "allergens": ["Cereals containing gluten"],
                     },
                     {
                         "name": "Hazelnut Brownies",
@@ -302,7 +308,7 @@ class Command(BaseCommand):
                         "description": "Chocolate brownies with roasted nuts and free range eggs.",
                         "is_organic": False,
                         "availability": Product.AvailabilityStatus.IN_SEASON,
-                        "allergens": ["Gluten", "Eggs", "Nuts"],
+                        "allergens": ["Cereals containing gluten", "Eggs", "Tree nuts"],
                     },
                     {
                         "name": "Stoneground Oats",
@@ -313,7 +319,7 @@ class Command(BaseCommand):
                         "description": "Stoneground oats for porridge, baking, and bulk catering prep.",
                         "is_organic": False,
                         "availability": Product.AvailabilityStatus.YEAR_ROUND,
-                        "allergens": ["Gluten"],
+                        "allergens": ["Cereals containing gluten"],
                     },
                 ],
             },
@@ -418,7 +424,7 @@ class Command(BaseCommand):
                         "description": "Traditional pork sausages.",
                         "is_organic": False,
                         "availability": Product.AvailabilityStatus.IN_SEASON,
-                        "allergens": ["Gluten"],
+                        "allergens": ["Cereals containing gluten"],
                     },
                 ],
             },
@@ -562,7 +568,22 @@ class Command(BaseCommand):
             c, _ = Category.objects.get_or_create(name=name, defaults={"slug": slugify(name)})
             categories[name] = c
 
-        allergen_names = ["Milk", "Eggs", "Gluten", "Nuts"]
+        allergen_names = [
+            "Celery",
+            "Cereals containing gluten",
+            "Crustaceans",
+            "Eggs",
+            "Fish",
+            "Lupin",
+            "Milk",
+            "Molluscs",
+            "Mustard",
+            "Peanuts",
+            "Sesame",
+            "Soybeans",
+            "Sulphur dioxide / sulphites",
+            "Tree nuts",
+        ]
         allergens: dict[str, Allergen] = {}
         for name in allergen_names:
             a, _ = Allergen.objects.get_or_create(name=name)
@@ -615,102 +636,107 @@ class Command(BaseCommand):
                     if aname in allergens:
                         prod.allergens.add(allergens[aname])
 
-        # -------------------------
-        # 6) ORDERS + ITEMS + PRODUCER SPLIT
-        # -------------------------
-        commission_rate = Decimal("0.10")
+        if include_transactions:
+            # -------------------------
+            # 6) ORDERS + ITEMS + PRODUCER SPLIT
+            # -------------------------
+            commission_rate = Decimal("0.10")
 
-        demo_order_ids = list(
-            PaymentTransaction.objects.filter(provider_reference__startswith="demo-")
-            .values_list("order_id", flat=True)
-        )
-        if demo_order_ids:
-            PaymentTransaction.objects.filter(order_id__in=demo_order_ids).delete()
-            ProducerOrder.objects.filter(parent_order_id__in=demo_order_ids).delete()
-            OrderItem.objects.filter(order_id__in=demo_order_ids).delete()
-            Order.objects.filter(id__in=demo_order_ids).delete()
+            demo_order_ids = list(
+                PaymentTransaction.objects.filter(provider_reference__startswith="demo-")
+                .values_list("order_id", flat=True)
+            )
+            if demo_order_ids:
+                PaymentTransaction.objects.filter(order_id__in=demo_order_ids).delete()
+                ProducerOrder.objects.filter(parent_order_id__in=demo_order_ids).delete()
+                OrderItem.objects.filter(order_id__in=demo_order_ids).delete()
+                Order.objects.filter(id__in=demo_order_ids).delete()
 
-        p1_products = Product.objects.filter(producer=producers[0], is_active=True).order_by("created_at")
-        p2_products = Product.objects.filter(producer=producers[1], is_active=True).order_by("created_at")
+            p1_products = Product.objects.filter(producer=producers[0], is_active=True).order_by("created_at")
+            p2_products = Product.objects.filter(producer=producers[1], is_active=True).order_by("created_at")
 
-        o1 = Order.objects.create(customer=customers[0], status=Order.Status.PAID)
-        OrderItem.objects.create(order=o1, product=p1_products.first(), quantity=2, unit_price=p1_products.first().price)
-        OrderItem.objects.create(order=o1, product=p2_products.first(), quantity=1, unit_price=p2_products.first().price)
+            o1 = Order.objects.create(customer=customers[0], status=Order.Status.PAID)
+            OrderItem.objects.create(order=o1, product=p1_products.first(), quantity=2, unit_price=p1_products.first().price)
+            OrderItem.objects.create(order=o1, product=p2_products.first(), quantity=1, unit_price=p2_products.first().price)
 
-        o2 = Order.objects.create(customer=customers[1], status=Order.Status.PAID)
-        second_p2 = p2_products.all()[1]
-        OrderItem.objects.create(order=o2, product=second_p2, quantity=3, unit_price=second_p2.price)
+            o2 = Order.objects.create(customer=customers[1], status=Order.Status.PAID)
+            second_p2 = p2_products.all()[1]
+            OrderItem.objects.create(order=o2, product=second_p2, quantity=3, unit_price=second_p2.price)
 
-        for order in [o1, o2]:
-            by_producer: dict[User, Decimal] = {}
-            for item in order.items.all():
-                prod_user = item.product.producer
-                by_producer.setdefault(prod_user, Decimal("0.00"))
-                by_producer[prod_user] += item.line_total
+            for order in [o1, o2]:
+                by_producer: dict[User, Decimal] = {}
+                for item in order.items.all():
+                    prod_user = item.product.producer
+                    by_producer.setdefault(prod_user, Decimal("0.00"))
+                    by_producer[prod_user] += item.line_total
 
-            for prod_user, subtotal in by_producer.items():
-                po, _ = ProducerOrder.objects.get_or_create(
-                    parent_order=order,
-                    producer=prod_user,
-                    defaults={"subtotal": subtotal.quantize(Decimal("0.01"))},
+                for prod_user, subtotal in by_producer.items():
+                    po, _ = ProducerOrder.objects.get_or_create(
+                        parent_order=order,
+                        producer=prod_user,
+                        defaults={"subtotal": subtotal.quantize(Decimal("0.01"))},
+                    )
+                    po.subtotal = subtotal.quantize(Decimal("0.01"))
+                    po.save()
+
+                order.recalculate_totals(commission_rate=commission_rate)
+                order.save()
+
+                PaymentTransaction.objects.create(
+                    order=order,
+                    status=PaymentTransaction.Status.SUCCEEDED,
+                    provider="manual",
+                    amount=order.total,
+                    currency="GBP",
+                    provider_reference=f"demo-{order.id}",
+                    raw_response={"demo": True},
                 )
-                po.subtotal = subtotal.quantize(Decimal("0.01"))
-                po.save()
 
-            order.recalculate_totals(commission_rate=commission_rate)
-            order.save()
+            # -------------------------
+            # 7) WEEKLY SETTLEMENTS
+            # -------------------------
+            today = timezone.now().date()
+            start = today - timedelta(days=7)
+            end = today
 
-            PaymentTransaction.objects.create(
-                order=order,
-                status=PaymentTransaction.Status.SUCCEEDED,
-                provider="manual",
-                amount=order.total,
-                currency="GBP",
-                provider_reference=f"demo-{order.id}",
-                raw_response={"demo": True},
-            )
+            for prod_user in producers:
+                gross = Decimal("0.00")
+                for po in ProducerOrder.objects.filter(producer=prod_user):
+                    gross += po.subtotal
 
-        # -------------------------
-        # 7) WEEKLY SETTLEMENTS
-        # -------------------------
-        today = timezone.now().date()
-        start = today - timedelta(days=7)
-        end = today
+                gross = gross.quantize(Decimal("0.01"))
+                commission = (gross * commission_rate).quantize(Decimal("0.01"))
+                payout = (gross - commission).quantize(Decimal("0.01"))
 
-        for prod_user in producers:
-            gross = Decimal("0.00")
-            for po in ProducerOrder.objects.filter(producer=prod_user):
-                gross += po.subtotal
+                WeeklySettlement.objects.update_or_create(
+                    producer=prod_user,
+                    period_start=start,
+                    period_end=end,
+                    defaults={
+                        "gross_sales": gross,
+                        "commission_total": commission,
+                        "payout_total": payout,
+                        "status": WeeklySettlement.Status.DRAFT,
+                    },
+                )
 
-            gross = gross.quantize(Decimal("0.01"))
-            commission = (gross * commission_rate).quantize(Decimal("0.01"))
-            payout = (gross - commission).quantize(Decimal("0.01"))
-
-            WeeklySettlement.objects.update_or_create(
-                producer=prod_user,
-                period_start=start,
-                period_end=end,
-                defaults={
-                    "gross_sales": gross,
-                    "commission_total": commission,
-                    "payout_total": payout,
-                    "status": WeeklySettlement.Status.DRAFT,
-                },
-            )
-
-        # -------------------------
-        # 8) OPTIONAL REVIEW
-        # -------------------------
-        if Review is not None:
-            any_product = Product.objects.first()
-            Review.objects.get_or_create(
-                product=any_product,
-                reviewer=customers[0],
-                defaults={"rating": 5, "comment": "Great quality. Demo review."},
-            )
+            # -------------------------
+            # 8) OPTIONAL REVIEW
+            # -------------------------
+            if Review is not None:
+                any_product = Product.objects.first()
+                Review.objects.get_or_create(
+                    product=any_product,
+                    reviewer=customers[0],
+                    defaults={"rating": 5, "comment": "Great quality. Demo review."},
+                )
 
         self.stdout.write(self.style.SUCCESS("Demo data created successfully."))
         self.stdout.write("Logins created (use USERNAME, not email):")
         self.stdout.write(f"  admin1 / {self.ADMIN_PASSWORD}")
         self.stdout.write(f"  producer1..producer5 / {self.PRODUCER_PASSWORD}")
         self.stdout.write(f"  customer1..customer2 / {self.CUSTOMER_PASSWORD}")
+        if include_transactions:
+            self.stdout.write("Demo transactions, payment records, and settlement snapshots were also created.")
+        else:
+            self.stdout.write("No demo transactions or settlement snapshots were created in this run.")

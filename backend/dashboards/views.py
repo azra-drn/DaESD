@@ -1,3 +1,5 @@
+from collections import OrderedDict
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 # backend/dashboards/views.py
@@ -5,15 +7,142 @@ import csv
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.models import User
 from catalog.models import Product, ProductInventoryHistory
 from orders.models import Order, ProducerOrder
-from payments.models import PaymentTransaction, WeeklySettlement
+from payments.models import WeeklySettlement
 from .forms import ProducerProductForm
+
+
+COMMISSION_RATE = Decimal("0.05")
+QUALIFYING_PARENT_STATUSES = [
+    Order.Status.PAID,
+    Order.Status.PROCESSING,
+    Order.Status.COMPLETED,
+]
+QUALIFYING_PRODUCER_STATUSES = [
+    ProducerOrder.Status.DISPATCHED,
+    ProducerOrder.Status.COMPLETED,
+]
+
+
+def _settlement_period_for(day):
+    period_start = day - timedelta(days=day.weekday())
+    period_end = period_start + timedelta(days=6)
+    return period_start, period_end
+
+
+def _payment_status_for_period(settlement_record):
+    if settlement_record and settlement_record.status == WeeklySettlement.Status.PAID:
+        return "Processed"
+    return "Pending Bank Transfer"
+
+
+def _producer_settlement_data(producer):
+    settlement_records = {
+        (settlement.period_start, settlement.period_end): settlement
+        for settlement in WeeklySettlement.objects.filter(producer=producer)
+    }
+
+    producer_orders = (
+        ProducerOrder.objects.filter(
+            producer=producer,
+            status__in=QUALIFYING_PRODUCER_STATUSES,
+            parent_order__status__in=QUALIFYING_PARENT_STATUSES,
+        )
+        .select_related("parent_order", "parent_order__customer", "producer__producer_profile")
+        .prefetch_related("parent_order__items__product")
+        .order_by("-parent_order__delivery_date", "-parent_order__created_at", "-id")
+    )
+
+    rows = []
+    period_map = OrderedDict()
+    ytd_gross = Decimal("0.00")
+    ytd_commission = Decimal("0.00")
+    ytd_payout = Decimal("0.00")
+    current_year = timezone.localdate().year
+
+    for producer_order in producer_orders:
+        settlement_day = producer_order.parent_order.delivery_date or timezone.localtime(
+            producer_order.parent_order.created_at
+        ).date()
+        period_start, period_end = _settlement_period_for(settlement_day)
+        settlement_record = settlement_records.get((period_start, period_end))
+
+        gross_amount = producer_order.subtotal.quantize(Decimal("0.01"))
+        commission_amount = (gross_amount * COMMISSION_RATE).quantize(Decimal("0.01"))
+        payout_amount = (gross_amount - commission_amount).quantize(Decimal("0.01"))
+
+        item_rows = []
+        item_descriptions = []
+        for item in producer_order.parent_order.items.all():
+            if item.product.producer_id != producer.id:
+                continue
+            item_rows.append(
+                {
+                    "product_name": item.product.name,
+                    "quantity": item.quantity,
+                    "unit": item.product.unit_label,
+                }
+            )
+            item_descriptions.append(
+                f"{item.product.name} ({item.quantity} {item.product.unit_label})"
+            )
+
+        row = {
+            "period_start": period_start,
+            "period_end": period_end,
+            "order_id": producer_order.parent_order.id,
+            "order_date": settlement_day,
+            "customer_label": producer_order.parent_order.customer.username,
+            "items": item_rows,
+            "items_csv": "; ".join(item_descriptions),
+            "gross_amount": gross_amount,
+            "commission_amount": commission_amount,
+            "payout_amount": payout_amount,
+            "payment_status": _payment_status_for_period(settlement_record),
+        }
+        rows.append(row)
+
+        period_key = (period_start, period_end)
+        if period_key not in period_map:
+            period_map[period_key] = {
+                "period_start": period_start,
+                "period_end": period_end,
+                "gross_amount": Decimal("0.00"),
+                "commission_amount": Decimal("0.00"),
+                "payout_amount": Decimal("0.00"),
+                "payment_status": _payment_status_for_period(settlement_record),
+                "orders": [],
+            }
+
+        period_summary = period_map[period_key]
+        period_summary["gross_amount"] += gross_amount
+        period_summary["commission_amount"] += commission_amount
+        period_summary["payout_amount"] += payout_amount
+        period_summary["orders"].append(row)
+
+        if period_end.year == current_year:
+            ytd_gross += gross_amount
+            ytd_commission += commission_amount
+            ytd_payout += payout_amount
+
+    period_summaries = list(period_map.values())
+    latest_summary = period_summaries[0] if period_summaries else None
+
+    return {
+        "rows": rows,
+        "period_summaries": period_summaries,
+        "latest_summary": latest_summary,
+        "ytd_gross": ytd_gross.quantize(Decimal("0.01")),
+        "ytd_commission": ytd_commission.quantize(Decimal("0.01")),
+        "ytd_payout": ytd_payout.quantize(Decimal("0.01")),
+    }
 
 
 def _admin_only_or_forbidden(request):
@@ -22,6 +151,160 @@ def _admin_only_or_forbidden(request):
     if not request.user.is_staff and getattr(request.user, "role", "") != User.Role.ADMIN:
         return render(request, "dashboards/forbidden.html", status=403)
     return None
+
+
+def _order_report_date(order):
+    return timezone.localtime(order.created_at).date()
+
+
+def _order_payment_details(order):
+    transaction = order.payment_transactions.order_by("-created_at").first()
+    if not transaction:
+        return {
+            "status": "Not recorded",
+            "reference": "Not recorded",
+        }
+    return {
+        "status": transaction.get_status_display(),
+        "reference": transaction.provider_reference or "Not recorded",
+    }
+
+
+def _producer_payment_breakdown(order):
+    breakdown = []
+    qualifying_statuses = {
+        ProducerOrder.Status.DISPATCHED,
+        ProducerOrder.Status.COMPLETED,
+    }
+    for producer_order in order.producer_orders.select_related("producer", "producer__producer_profile").all():
+        gross_amount = producer_order.subtotal.quantize(Decimal("0.01"))
+        payout_amount = (gross_amount * (Decimal("1.00") - COMMISSION_RATE)).quantize(Decimal("0.01"))
+        breakdown.append(
+            {
+                "producer_name": getattr(
+                    getattr(producer_order.producer, "producer_profile", None),
+                    "business_name",
+                    "",
+                )
+                or producer_order.producer.username,
+                "status": producer_order.get_status_display(),
+                "status_value": producer_order.status,
+                "gross_amount": gross_amount,
+                "payout_amount": payout_amount,
+                "is_qualifying": producer_order.status in qualifying_statuses,
+            }
+        )
+    return breakdown
+
+
+def _admin_finance_report_rows(date_from=None, date_to=None, producer_id="", order_status=""):
+    all_producer_choices = [
+        getattr(getattr(user, "producer_profile", None), "business_name", "") or user.username
+        for user in User.objects.filter(role=User.Role.PRODUCER).select_related("producer_profile").order_by("username")
+    ]
+    qualifying_statuses = [
+        Order.Status.PAID,
+        Order.Status.PROCESSING,
+        Order.Status.COMPLETED,
+    ]
+    orders = (
+        Order.objects.filter(status__in=qualifying_statuses)
+        .select_related("customer")
+        .prefetch_related(
+            "items__product",
+            "producer_orders__producer",
+            "producer_orders__producer__producer_profile",
+            "payment_transactions",
+        )
+        .order_by("-delivery_date", "-created_at", "-id")
+    )
+
+    rows = []
+    producer_choices = OrderedDict()
+    total_order_value = Decimal("0.00")
+    total_commission = Decimal("0.00")
+    total_payout = Decimal("0.00")
+    order_count = 0
+    ytd_commission = Decimal("0.00")
+    current_year = timezone.localdate().year
+
+    for order in orders:
+        order_date = _order_report_date(order)
+        if date_from and order_date < date_from:
+            continue
+        if date_to and order_date > date_to:
+            continue
+        if order_status and order.status != order_status:
+            continue
+
+        producer_breakdown = _producer_payment_breakdown(order)
+        reportable_statuses = {
+            ProducerOrder.Status.DISPATCHED,
+            ProducerOrder.Status.COMPLETED,
+            ProducerOrder.Status.CANCELLED,
+        }
+        for producer_entry in producer_breakdown:
+            producer_choices[producer_entry["producer_name"]] = producer_entry["producer_name"]
+
+        if producer_id:
+            matching_breakdown = [entry for entry in producer_breakdown if entry["producer_name"] == producer_id]
+            matching_breakdown = [
+                entry for entry in matching_breakdown if entry["status_value"] in reportable_statuses
+            ]
+            if not matching_breakdown:
+                continue
+        else:
+            if not producer_breakdown or any(
+                entry["status_value"] not in reportable_statuses for entry in producer_breakdown
+            ):
+                continue
+            matching_breakdown = producer_breakdown
+
+        gross_amount = order.subtotal.quantize(Decimal("0.01"))
+        commission_amount = (gross_amount * COMMISSION_RATE).quantize(Decimal("0.01"))
+        payout_amount = (gross_amount - commission_amount).quantize(Decimal("0.01"))
+        payment_details = _order_payment_details(order)
+        items_summary = "; ".join(
+            f"{item.product.name} ({item.quantity} {item.product.unit_label})" for item in order.items.all()
+        )
+
+        row = {
+            "order_id": order.id,
+            "order_date": order_date,
+            "customer_label": order.customer.username,
+            "gross_amount": gross_amount,
+            "commission_amount": commission_amount,
+            "payout_amount": payout_amount,
+            "status": order.get_status_display(),
+            "status_value": order.status,
+            "payment_status": payment_details["status"],
+            "payment_reference": payment_details["reference"],
+            "items_summary": items_summary,
+            "producer_breakdown": matching_breakdown if producer_id else producer_breakdown,
+        }
+        rows.append(row)
+
+        total_order_value += gross_amount
+        total_commission += commission_amount
+        total_payout += payout_amount
+        order_count += 1
+        if order_date.year == current_year:
+            ytd_commission += commission_amount
+
+    month_start = timezone.localdate().replace(day=1)
+    monthly_rows = [row for row in rows if row["order_date"] >= month_start]
+    monthly_commission_total = sum((row["commission_amount"] for row in monthly_rows), Decimal("0.00"))
+
+    return {
+        "rows": rows,
+        "producer_choices": sorted(set(all_producer_choices) | set(producer_choices.keys())),
+        "total_order_value": total_order_value.quantize(Decimal("0.01")),
+        "total_commission": total_commission.quantize(Decimal("0.01")),
+        "total_payout": total_payout.quantize(Decimal("0.01")),
+        "order_count": order_count,
+        "monthly_commission_total": monthly_commission_total.quantize(Decimal("0.01")),
+        "ytd_commission_total": ytd_commission.quantize(Decimal("0.01")),
+    }
 
 
 @login_required
@@ -36,23 +319,6 @@ def admin_dashboard(request):
 
     customers_count = User.objects.filter(role=User.Role.CUSTOMER).count()
     producers_count = User.objects.filter(role=User.Role.PRODUCER).count()
-    admins_count = User.objects.filter(role=User.Role.ADMIN).count()
-
-    
-    producer_list = list(
-        User.objects.filter(role=User.Role.PRODUCER).order_by("username")
-    )
-
-    
-    for p in producer_list:
-        p.postcode_display = (
-            getattr(p, "postcode", None)
-            or getattr(p, "post_code", None)
-            or getattr(p, "zip_code", None)
-            or ""
-        )
-
-    
     recent_orders = list(
         Order.objects.select_related("customer")
         .prefetch_related("items__product__producer", "items__product")
@@ -69,33 +335,14 @@ def admin_dashboard(request):
         .order_by("-created_at")[:15]
     )
 
-    total_commission = sum(
-        Order.objects.filter(
-            status__in=[Order.Status.PAID, Order.Status.PROCESSING, Order.Status.COMPLETED]
-        ).values_list("commission_total", flat=True),
-        Decimal("0.00"),
-    )
-    total_gross_sales = sum(
-        WeeklySettlement.objects.values_list("gross_sales", flat=True),
-        Decimal("0.00"),
-    )
-    payment_success_count = PaymentTransaction.objects.filter(
-        status=PaymentTransaction.Status.SUCCEEDED
-    ).count()
-
     context = {
         "total_products": total_products,
         "active_products": active_products,
         "total_orders": total_orders,
         "customers_count": customers_count,
         "producers_count": producers_count,
-        "admins_count": admins_count,
-        "producer_list": producer_list,
         "recent_orders": recent_orders,
         "recent_producer_orders": recent_producer_orders,
-        "total_commission": total_commission,
-        "total_gross_sales": total_gross_sales,
-        "payment_success_count": payment_success_count,
     }
     return render(request, "dashboards/admin_dashboard.html", context)
 
@@ -106,45 +353,35 @@ def admin_finance_report(request):
     if admin_guard:
         return admin_guard
 
-    settlements = list(
-        WeeklySettlement.objects.select_related("producer", "producer__producer_profile")
-        .order_by("-period_end", "producer__username")
-    )
-    settled_orders = Order.objects.filter(
-        status__in=[Order.Status.PAID, Order.Status.PROCESSING, Order.Status.COMPLETED]
-    )
-    transactions = list(
-        PaymentTransaction.objects.select_related("order", "order__customer")
-        .order_by("-created_at")[:20]
-    )
+    today = timezone.localdate()
+    default_date_to = today
+    default_date_from = today - timedelta(days=13)
+    date_from_raw = (request.GET.get("from") or "").strip()
+    date_to_raw = (request.GET.get("to") or "").strip()
+    producer_filter = (request.GET.get("producer") or "").strip()
+    order_status = (request.GET.get("order_status") or "").strip()
+    order_id = (request.GET.get("order_id") or "").strip()
 
-    total_gross_sales = sum(
-        (settlement.gross_sales for settlement in settlements),
-        Decimal("0.00"),
-    )
-    total_commission = sum(
-        (settlement.commission_total for settlement in settlements),
-        Decimal("0.00"),
-    )
-    total_payout = sum(
-        (settlement.payout_total for settlement in settlements),
-        Decimal("0.00"),
-    )
+    try:
+        date_from = datetime.strptime(date_from_raw, "%Y-%m-%d").date() if date_from_raw else default_date_from
+    except ValueError:
+        date_from = default_date_from
+    try:
+        date_to = datetime.strptime(date_to_raw, "%Y-%m-%d").date() if date_to_raw else default_date_to
+    except ValueError:
+        date_to = default_date_to
 
-    producer_rows = []
-    for settlement in settlements:
-        profile = getattr(settlement.producer, "producer_profile", None)
-        producer_rows.append(
-            {
-                "producer_name": getattr(profile, "business_name", "") or settlement.producer.username,
-                "period_start": settlement.period_start,
-                "period_end": settlement.period_end,
-                "gross_sales": settlement.gross_sales,
-                "commission_total": settlement.commission_total,
-                "payout_total": settlement.payout_total,
-                "status": settlement.get_status_display(),
-            }
-        )
+    report_data = _admin_finance_report_rows(
+        date_from=date_from,
+        date_to=date_to,
+        producer_id=producer_filter,
+        order_status=order_status,
+    )
+    rows = report_data["rows"]
+    selected_order = next(
+        (row for row in rows if order_id.isdigit() and row["order_id"] == int(order_id)),
+        rows[0] if rows else None,
+    )
 
     if request.GET.get("format") == "csv":
         response = HttpResponse(content_type="text/csv")
@@ -152,40 +389,69 @@ def admin_finance_report(request):
         writer = csv.writer(response)
         writer.writerow(
             [
+                "Order Number",
+                "Order Date",
+                "Customer",
+                "Order Gross",
+                "Commission (5%)",
+                "Total Producer Payout (95%)",
+                "Order Status",
+                "Payment Status",
+                "Payment Reference",
                 "Producer",
-                "Period Start",
-                "Period End",
-                "Gross Sales",
-                "Commission",
-                "Payout",
-                "Status",
+                "Producer Gross",
+                "Producer Payout",
+                "Producer Order Status",
+                "Items",
             ]
         )
-        for row in producer_rows:
-            writer.writerow(
-                [
-                    row["producer_name"],
-                    row["period_start"],
-                    row["period_end"],
-                    row["gross_sales"],
-                    row["commission_total"],
-                    row["payout_total"],
-                    row["status"],
-                ]
-            )
+        for row in rows:
+            for producer_row in row["producer_breakdown"]:
+                writer.writerow(
+                    [
+                        row["order_id"],
+                        row["order_date"],
+                        row["customer_label"],
+                        row["gross_amount"],
+                        row["commission_amount"],
+                        row["payout_amount"],
+                        row["status"],
+                        row["payment_status"],
+                        row["payment_reference"],
+                        producer_row["producer_name"],
+                        producer_row["gross_amount"],
+                        producer_row["payout_amount"],
+                        producer_row["status"],
+                        row["items_summary"],
+                    ]
+                )
         return response
 
     return render(
         request,
         "dashboards/admin_finance_report.html",
         {
-            "producer_rows": producer_rows,
-            "transactions": transactions,
-            "settlement_count": len(producer_rows),
-            "settled_order_count": settled_orders.count(),
-            "total_gross_sales": total_gross_sales,
-            "total_commission": total_commission,
-            "total_payout": total_payout,
+            "report_rows": rows,
+            "selected_order": selected_order,
+            "total_order_value": report_data["total_order_value"],
+            "total_commission": report_data["total_commission"],
+            "total_payout": report_data["total_payout"],
+            "order_count": report_data["order_count"],
+            "monthly_commission_total": report_data["monthly_commission_total"],
+            "ytd_commission_total": report_data["ytd_commission_total"],
+            "producer_choices": report_data["producer_choices"],
+            "filters": {
+                "from": date_from.isoformat(),
+                "to": date_to.isoformat(),
+                "producer": producer_filter,
+                "order_status": order_status,
+                "order_id": order_id,
+            },
+            "order_status_choices": [
+                Order.Status.PAID,
+                Order.Status.PROCESSING,
+                Order.Status.COMPLETED,
+            ],
         },
     )
 
@@ -243,8 +509,11 @@ def producer_dashboard(request):
     )
 
     low_stock_products = [p for p in products_qs if p.is_low_stock]
-    settlements_qs = WeeklySettlement.objects.filter(producer=request.user).order_by("-period_end")
-    latest_settlement = settlements_qs.first()
+    settlement_data = _producer_settlement_data(request.user)
+    pending_orders_count = ProducerOrder.objects.filter(
+        producer=request.user,
+        status=ProducerOrder.Status.PENDING,
+    ).count()
 
     context = {
         "products_count": products_qs.count(),
@@ -252,9 +521,23 @@ def producer_dashboard(request):
         "low_stock_count": len(low_stock_products),
         "low_stock_products": low_stock_products[:5],
         "recent_products": products_qs[:5],
-        "latest_settlement": latest_settlement,
+        "latest_settlement": settlement_data["latest_summary"],
+        "pending_orders_count": pending_orders_count,
     }
     return render(request, "dashboards/producer_dashboard.html", context)
+
+
+@login_required
+def producer_order_notifications(request):
+    redirect_response = _producer_only_or_redirect(request)
+    if redirect_response:
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    pending_orders_count = ProducerOrder.objects.filter(
+        producer=request.user,
+        status=ProducerOrder.Status.PENDING,
+    ).count()
+    return JsonResponse({"pending_orders_count": pending_orders_count})
 
 
 @login_required
@@ -263,28 +546,52 @@ def producer_settlements(request):
     if redirect_response:
         return redirect_response
 
-    settlements = (
-        WeeklySettlement.objects.filter(producer=request.user)
-        .order_by("-period_end", "-created_at")
-    )
+    settlement_data = _producer_settlement_data(request.user)
 
-    total_payout = sum(
-        (settlement.payout_total for settlement in settlements),
-        start=Decimal("0.00"),
-    )
-    total_gross = sum(
-        (settlement.gross_sales for settlement in settlements),
-        start=Decimal("0.00"),
-    )
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="producer-settlement-report.csv"'
+        writer = csv.writer(response)
+        writer.writerow(
+            [
+                "Settlement Period",
+                "Order Number",
+                "Customer",
+                "Products",
+                "Order Date",
+                "Gross Amount",
+                "Commission (5%)",
+                "Producer Payout (95%)",
+                "Payment Status",
+            ]
+        )
+        for row in settlement_data["rows"]:
+            writer.writerow(
+                [
+                    f"{row['period_start']} to {row['period_end']}",
+                    row["order_id"],
+                    row["customer_label"],
+                    row["items_csv"],
+                    row["order_date"],
+                    row["gross_amount"],
+                    row["commission_amount"],
+                    row["payout_amount"],
+                    row["payment_status"],
+                ]
+            )
+        return response
 
     return render(
         request,
         "dashboards/producer_settlements.html",
         {
             "producer_profile": getattr(request.user, "producer_profile", None),
-            "settlements": settlements,
-            "total_payout": total_payout,
-            "total_gross": total_gross,
+            "settlement_rows": settlement_data["rows"],
+            "period_summaries": settlement_data["period_summaries"],
+            "latest_settlement": settlement_data["latest_summary"],
+            "ytd_gross": settlement_data["ytd_gross"],
+            "ytd_commission": settlement_data["ytd_commission"],
+            "ytd_payout": settlement_data["ytd_payout"],
         },
     )
 

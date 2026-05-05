@@ -73,6 +73,15 @@
       </div>
 
       <div class="col-md-4">
+        <div id="seasonMonthsField" {% if form.availability_status.value != 'in_season' %}style="display: none;"{% endif %}>
+          <label class="form-label">Season Months</label>
+          {{ form.season_months }}
+          <div class="small text-soft mt-1">For example: June-August</div>
+          {% if form.season_months.errors %}<div class="text-danger small mt-1">{{ form.season_months.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="col-md-4">
         <label class="form-label">Best Before Date</label>
         {{ form.best_before_date }}
         {% if form.best_before_date.errors %}<div class="text-danger small mt-1">{{ form.best_before_date.errors }}</div>{% endif %}
@@ -124,4 +133,24 @@
     </form>
   </div>
 </div>
+<script>
+  (function () {
+    var availabilitySelect = document.getElementById("id_availability_status");
+    var seasonMonthsField = document.getElementById("seasonMonthsField");
+    var seasonMonthsInput = document.getElementById("id_season_months");
+
+    if (!availabilitySelect || !seasonMonthsField || !seasonMonthsInput) return;
+
+    function toggleSeasonMonths() {
+      var isInSeason = availabilitySelect.value === "in_season";
+      seasonMonthsField.style.display = isInSeason ? "" : "none";
+      if (!isInSeason) {
+        seasonMonthsInput.value = "";
+      }
+    }
+
+    availabilitySelect.addEventListener("change", toggleSeasonMonths);
+    toggleSeasonMonths();
+  })();
+</script>
 {% endblock %}

@@ -29,7 +29,7 @@
             {% if request.user.is_authenticated %}
               {% if request.user.is_admin_user %}
                 <a class="nav-link text-soft" href="{% url 'admin_dashboard' %}">Admin Dashboard</a>
-                <a class="nav-link text-soft" href="{% url 'admin_finance_report' %}">Finance</a>
+                <a class="nav-link text-soft" href="{% url 'admin_finance_report' %}">Financial Reports</a>
               {% elif request.user.is_producer_user %}
                 <a class="nav-link text-soft" href="{% url 'producer_dashboard' %}">Producer Dashboard</a>
                 <a class="nav-link text-soft" href="{% url 'producer_stock' %}">My Products</a>

@@ -49,7 +49,12 @@
               <td>{{ product.unit_label }}</td>
               <td>£{{ product.price|floatformat:2 }}</td>
               <td>{{ product.stock }} {{ product.unit_label }}</td>
-              <td>{{ product.get_availability_status_display }}</td>
+              <td>
+                {{ product.get_availability_status_display }}
+                {% if product.availability_status == 'in_season' and product.season_months %}
+                  <div class="small text-soft">{{ product.season_months }}</div>
+                {% endif %}
+              </td>
               <td>
                 {% if product.surplus_is_active %}
                   <span class="badge text-bg-danger">-{{ product.surplus_discount_percent }}%</span>
@@ -66,7 +71,9 @@
                 {% endif %}
               </td>
               <td>
-                {% if product.is_low_stock %}
+                {% if product.stock <= 0 %}
+                  <span class="badge text-bg-danger">No Stock</span>
+                {% elif product.is_low_stock %}
                   <span class="badge text-bg-warning">Low Stock</span>
                 {% else %}
                   <span class="badge text-bg-light">OK</span>

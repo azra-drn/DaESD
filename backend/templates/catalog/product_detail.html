@@ -31,6 +31,9 @@
             <div class="detail-value">{{ product.description|default:"Fresh local produce ready to order." }}</div>
             <div class="detail-value text-soft">Sold in: {{ product.unit_label }}</div>
             <div class="detail-value text-soft">Available stock: {{ product.stock|floatformat:0 }} left</div>
+            {% if product.availability_status == 'in_season' and product.season_months %}
+              <div class="detail-value text-soft">Season: {{ product.season_months }}</div>
+            {% endif %}
           </div>
         </div>
 
@@ -157,6 +160,9 @@
       <div class="detail-block">
         <div class="detail-label">Availability</div>
         <div class="detail-value">{{ product.get_availability_status_display }}</div>
+        {% if product.availability_status == 'in_season' and product.season_months %}
+          <div class="small text-soft mt-1">{{ product.season_months }}</div>
+        {% endif %}
       </div>
 
       <div class="detail-block">

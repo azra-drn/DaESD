@@ -183,6 +183,23 @@ class RoleAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(User.objects.filter(username="schoolgroup").exists())
 
+    def test_customer_registration_requires_address(self):
+        response = self.client.post(
+            reverse("register_customer"),
+            {
+                "username": "noaddress",
+                "email": "noaddress@example.com",
+                "account_type": "individual",
+                "phone": "07123456789",
+                "postcode": "BS1 5JG",
+                "password1": "StrongPass123!",
+                "password2": "StrongPass123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(username="noaddress").exists())
+
     def test_restaurant_registration_stores_account_type_fields(self):
         response = self.client.post(
             reverse("register_customer"),

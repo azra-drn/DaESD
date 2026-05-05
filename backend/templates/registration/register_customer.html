@@ -10,7 +10,7 @@
   </div>
 
   <p class="subtitle">
-    Create an individual, community group, or restaurant account to browse and order products.
+    Create your customer account to browse and order local products.
   </p>
 
   {% if form.errors %}
@@ -35,37 +35,37 @@
     </div>
 
     <div class="field full-width">
-      <label for="{{ form.account_type.id_for_label }}">Account Type (Required)</label>
+      <label for="{{ form.account_type.id_for_label }}">Account Type</label>
       {{ form.account_type }}
       {{ form.account_type.errors }}
     </div>
 
-    <div class="field full-width">
-      <label for="{{ form.organisation_name.id_for_label }}">Organisation / Group Name (Required for Community Group and Restaurant)</label>
+    <div class="field full-width" data-customer-organisation-field style="display: none;">
+      <label for="{{ form.organisation_name.id_for_label }}">Organisation / Group Name</label>
       {{ form.organisation_name }}
       {{ form.organisation_name.errors }}
     </div>
 
-    <div class="field">
-      <label for="{{ form.institutional_email.id_for_label }}">Institutional Email (Optional)</label>
+    <div class="field" data-customer-organisation-field style="display: none;">
+      <label for="{{ form.institutional_email.id_for_label }}">Institutional Email</label>
       {{ form.institutional_email }}
       {{ form.institutional_email.errors }}
     </div>
 
     <div class="field">
-      <label for="{{ form.phone.id_for_label }}">Phone (Optional)</label>
+      <label for="{{ form.phone.id_for_label }}">Phone</label>
       {{ form.phone }}
       {{ form.phone.errors }}
     </div>
 
     <div class="field full-width">
-      <label for="{{ form.address_line1.id_for_label }}">Address (Optional, used as default delivery address)</label>
+      <label for="{{ form.address_line1.id_for_label }}">Address</label>
       {{ form.address_line1 }}
       {{ form.address_line1.errors }}
     </div>
 
     <div class="field">
-      <label for="{{ form.postcode.id_for_label }}">Postcode (Required)</label>
+      <label for="{{ form.postcode.id_for_label }}">Postcode</label>
       {{ form.postcode }}
       {{ form.postcode.errors }}
     </div>
@@ -87,4 +87,24 @@
       <a class="auth-link-secondary" href="{% url 'login' %}">Back to login</a>
     </div>
   </form>
+  <script>
+    (function () {
+      var accountType = document.getElementById("id_account_type");
+      var organisationFields = document.querySelectorAll("[data-customer-organisation-field]");
+      var organisationInput = document.getElementById("id_organisation_name");
+
+      if (!accountType || !organisationFields.length || !organisationInput) return;
+
+      function toggleOrganisationFields() {
+        var shouldShow = accountType.value === "community_group" || accountType.value === "restaurant";
+        organisationFields.forEach(function (field) {
+          field.style.display = shouldShow ? "" : "none";
+        });
+        organisationInput.required = shouldShow;
+      }
+
+      accountType.addEventListener("change", toggleOrganisationFields);
+      toggleOrganisationFields();
+    })();
+  </script>
 {% endblock %}

@@ -7,6 +7,7 @@ urlpatterns = [
     path("customer-dashboard/", views.customer_dashboard, name="customer_dashboard"),
     path("producer-dashboard/", views.producer_dashboard, name="producer_dashboard"),
     path("producer/settlements/", views.producer_settlements, name="producer_settlements"),
+    path("producer/order-notifications/", views.producer_order_notifications, name="producer_order_notifications"),
 
     path("producer/stock/", views.producer_stock, name="producer_stock"),
     path("producer/edit-stock-list/", views.edit_stock_list, name="edit_stock_list"),

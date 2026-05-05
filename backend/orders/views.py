@@ -821,21 +821,43 @@ def producer_order_detail_page(request, producer_order_id):
         "orders/producer_order_detail.html",
         {"producer_order": producer_order, "items": items},
     )
+
+
 @login_required
 @require_POST
 def update_producer_order_status(request, producer_order_id):
-    # Only producers can perform this action
     if getattr(request.user, "role", "") != User.Role.PRODUCER:
         return redirect("after_login")
 
-    # Ensure the order belongs to THIS producer
     order = get_object_or_404(ProducerOrder, id=producer_order_id, producer=request.user)
-    
     new_status = request.POST.get("status")
-    if new_status in [ProducerOrder.Status.ACCEPTED, ProducerOrder.Status.CANCELLED]:
+
+    allowed_transitions = {
+        ProducerOrder.Status.PENDING: {
+            ProducerOrder.Status.ACCEPTED: "accepted",
+            ProducerOrder.Status.CANCELLED: "declined",
+        },
+        ProducerOrder.Status.ACCEPTED: {
+            ProducerOrder.Status.DISPATCHED: "marked as dispatched",
+            ProducerOrder.Status.COMPLETED: "marked as completed",
+        },
+        ProducerOrder.Status.DISPATCHED: {
+            ProducerOrder.Status.COMPLETED: "marked as completed",
+        },
+    }
+
+    transition_labels = allowed_transitions.get(order.status, {})
+    if new_status in transition_labels:
         order.status = new_status
-        order.save()
-        label = "accepted" if new_status == ProducerOrder.Status.ACCEPTED else "declined"
+        order.save(update_fields=["status"])
+        label = transition_labels[new_status]
         messages.success(request, f"Order #{order.id} has been {label}.")
-    
+
+    next_url = request.POST.get("next")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(next_url)
     return redirect("producer_orders")

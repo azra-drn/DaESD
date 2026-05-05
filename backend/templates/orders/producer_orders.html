@@ -36,6 +36,7 @@
               <td>
                 <span class="badge
                   {% if po.status == 'completed' %}bg-success
+                  {% elif po.status == 'dispatched' %}bg-info text-dark
                   {% elif po.status == 'pending' %}bg-warning text-dark
                   {% elif po.status == 'accepted' %}bg-info
                   {% elif po.status == 'cancelled' %}bg-danger
@@ -48,13 +49,35 @@
                   {% if po.status == 'pending' %}
                     <form action="{% url 'update_producer_order_status' po.id %}" method="post" class="d-inline">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <input type="hidden" name="status" value="accepted">
                       <button type="submit" class="btn btn-success btn-sm">Accept</button>
                     </form>
                     <form action="{% url 'update_producer_order_status' po.id %}" method="post" class="d-inline">
                       {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
                       <input type="hidden" name="status" value="cancelled">
                       <button type="submit" class="btn btn-outline-danger btn-sm">Decline</button>
+                    </form>
+                  {% elif po.status == 'accepted' %}
+                    <form action="{% url 'update_producer_order_status' po.id %}" method="post" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <input type="hidden" name="status" value="dispatched">
+                      <button type="submit" class="btn btn-secondary btn-sm">Mark Dispatched</button>
+                    </form>
+                    <form action="{% url 'update_producer_order_status' po.id %}" method="post" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <input type="hidden" name="status" value="completed">
+                      <button type="submit" class="btn btn-success btn-sm">Mark Completed</button>
+                    </form>
+                  {% elif po.status == 'dispatched' %}
+                    <form action="{% url 'update_producer_order_status' po.id %}" method="post" class="d-inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <input type="hidden" name="status" value="completed">
+                      <button type="submit" class="btn btn-success btn-sm">Mark Completed</button>
                     </form>
                   {% endif %}
                   <a class="btn btn-outline-secondary btn-sm" href="{% url 'producer_order_detail' po.id %}">Details</a>

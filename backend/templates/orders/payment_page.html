@@ -2,25 +2,388 @@
 {% block title %}Payment | BRFN{% endblock %}
 
 {% block content %}
+<style>
+  .payment-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 36px 20px 48px;
+  }
+
+  .payment-layout {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 28px;
+    align-items: start;
+  }
+
+  .payment-panel,
+  .payment-summary {
+    background: #ffffff;
+    border: 1px solid #d8ded4;
+    border-radius: 6px;
+    box-shadow: 0 10px 24px rgba(23, 33, 27, 0.05);
+  }
+
+  .payment-panel {
+    padding: 30px;
+  }
+
+  .payment-summary {
+    padding: 24px;
+    position: sticky;
+    top: 110px;
+  }
+
+  .payment-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 191, 70, 0.20);
+    border: 1px solid rgba(255, 191, 70, 0.55);
+    color: #7a5200;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 7px 10px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+
+  .payment-title {
+    color: #1f2a1f;
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    line-height: 1.05;
+    margin: 0 0 12px;
+    font-weight: 900;
+  }
+
+  .payment-subtitle {
+    color: #5f6b61;
+    margin: 0 0 26px;
+    max-width: 40rem;
+  }
+
+  .payment-note {
+    background: #eef5ec;
+    border: 1px solid #d8ded4;
+    color: #2f5d3a;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    font-size: 0.95rem;
+  }
+
+  .payment-field {
+    margin-bottom: 16px;
+  }
+
+  .payment-field label {
+    display: block;
+    color: #2f4032;
+    font-weight: 750;
+    margin-bottom: 7px;
+    font-size: 0.92rem;
+  }
+
+  .payment-field input {
+    width: 100%;
+    border: 1.5px solid rgba(80, 114, 85, 0.24);
+    background: #ffffff;
+    color: #1f2a1f;
+    border-radius: 6px;
+    padding: 13px 14px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .payment-field input:focus {
+    border-color: #4AAD52;
+    box-shadow: 0 0 0 4px rgba(74, 173, 82, 0.14);
+  }
+
+  .payment-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .payment-submit {
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    padding: 14px 18px;
+    background: #de6b48;
+    color: #ffffff;
+    font-weight: 850;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  .payment-submit:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+  }
+
+  .payment-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .payment-summary h2 {
+    color: #1f2a1f;
+    margin: 0 0 18px;
+    font-size: 1.35rem;
+  }
+
+  .summary-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(80, 114, 85, 0.14);
+    color: #405240;
+  }
+
+  .summary-line strong {
+    color: #1f2a1f;
+  }
+
+  .summary-total {
+    margin-top: 18px;
+    background: #f7f4ea;
+    border: 1px solid #d8ded4;
+    border-radius: 6px;
+    padding: 18px;
+  }
+
+  .summary-total .detail-label {
+    color: #5f6d60;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.78rem;
+    margin-bottom: 6px;
+  }
+
+  .summary-total strong {
+    color: #DE6B48;
+    font-size: 2rem;
+    line-height: 1;
+  }
+
+  .payment-security-list {
+    list-style: none;
+    padding: 0;
+    margin: 18px 0 0;
+  }
+
+  .payment-security-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(80, 114, 85, 0.14);
+    color: #405240;
+    font-size: 0.95rem;
+  }
+
+  @media (max-width: 860px) {
+    .payment-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .payment-summary {
+      position: static;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .payment-panel,
+    .payment-summary {
+      padding: 22px;
+    }
+
+    .payment-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
 <div class="page-shell payment-shell">
-  <div class="payment-card">
-    <div class="mb-4">
+  <div class="payment-layout">
+
+    <section class="payment-panel">
       <a href="{% url 'order_history' %}" class="btn btn-back mb-3">← Back to Orders</a>
-      <h1 class="page-title" style="font-size: clamp(2rem, 4vw, 2.6rem);">Pay for Order #{{ order.id }}</h1>
-      <p class="page-subtitle">Confirm the payment for this order below.</p>
-    </div>
 
-    <div class="payment-amount mb-4">
-      <div class="detail-label">Total amount</div>
-      <strong>£{{ order.total|floatformat:2 }}</strong>
-    </div>
+      <div class="payment-kicker">Secure payment</div>
 
-    <form method="POST">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-success w-100">
-        Confirm Payment
-      </button>
-    </form>
+      <h1 class="payment-title">Pay for Order #{{ order.id }}</h1>
+      <p class="payment-subtitle">Review the payment details below and confirm the card payment for this BRFN order.</p>
+
+      <div class="payment-note">
+        Demo checkout: use any valid-looking card details and a future expiry date to complete the payment flow.
+      </div>
+
+      <form method="POST" id="paymentForm">
+        {% csrf_token %}
+
+        <div class="payment-field">
+          <label for="cardName">Cardholder name</label>
+          <input
+            type="text"
+            id="cardName"
+            name="cardholder_name"
+            placeholder="Full name on card"
+            autocomplete="cc-name"
+            required
+          >
+        </div>
+
+        <div class="payment-field">
+          <label for="cardNumber">Card number</label>
+          <input
+            type="text"
+            id="cardNumber"
+            name="card_number"
+            placeholder="4242 4242 4242 4242"
+            maxlength="19"
+            inputmode="numeric"
+            autocomplete="cc-number"
+            required
+          >
+        </div>
+
+        <div class="payment-row">
+          <div class="payment-field">
+            <label for="expiry">Expiry date</label>
+            <input
+              type="text"
+              id="expiry"
+              name="expiry"
+              placeholder="MM/YY"
+              maxlength="5"
+              inputmode="numeric"
+              autocomplete="cc-exp"
+              required
+            >
+          </div>
+
+          <div class="payment-field">
+            <label for="cvc">CVC</label>
+            <input
+              type="text"
+              id="cvc"
+              name="cvc"
+              placeholder="123"
+              maxlength="4"
+              inputmode="numeric"
+              autocomplete="cc-csc"
+              required
+            >
+          </div>
+        </div>
+
+        <div class="payment-field">
+          <label for="billingPostcode">Billing postcode</label>
+          <input
+            type="text"
+            id="billingPostcode"
+            name="billing_postcode"
+            placeholder="BS1 5JG"
+            autocomplete="postal-code"
+            required
+          >
+        </div>
+
+        <button type="submit" class="payment-submit" id="submitBtn">
+          Confirm payment · £{{ order.total|floatformat:2 }}
+        </button>
+      </form>
+    </section>
+
+    <aside class="payment-summary">
+      <h2>Order summary</h2>
+
+      <div class="summary-line">
+        <span>Order reference</span>
+        <strong>#{{ order.id }}</strong>
+      </div>
+
+      <div class="summary-line">
+        <span>Payment type</span>
+        <strong>Card payment</strong>
+      </div>
+
+      <div class="summary-line">
+        <span>Subtotal</span>
+        <strong>£{{ order.subtotal|floatformat:2 }}</strong>
+      </div>
+
+      <div class="summary-line">
+        <span>BRFN commission</span>
+        <strong>£{{ order.commission_total|floatformat:2 }}</strong>
+      </div>
+
+      <div class="summary-line">
+        <span>Status</span>
+        <strong>Awaiting payment</strong>
+      </div>
+
+      <div class="summary-total">
+        <div class="detail-label">Total amount</div>
+        <strong>£{{ order.total|floatformat:2 }}</strong>
+      </div>
+
+      <ul class="payment-security-list">
+        <li><span>Processing</span><strong>Demo confirmation</strong></li>
+        <li><span>Currency</span><strong>GBP</strong></li>
+        <li><span>Reference</span><strong>Order #{{ order.id }}</strong></li>
+      </ul>
+    </aside>
+
   </div>
 </div>
+
+<script>
+  const cardNumberInput = document.getElementById("cardNumber");
+  const expiryInput = document.getElementById("expiry");
+  const cvcInput = document.getElementById("cvc");
+  const submitBtn = document.getElementById("submitBtn");
+  const paymentForm = document.getElementById("paymentForm");
+
+  if (cardNumberInput) {
+    cardNumberInput.addEventListener("input", function (event) {
+      event.target.value = event.target.value
+        .replace(/[^\d]/g, "")
+        .replace(/(.{4})/g, "$1 ")
+        .trim();
+    });
+  }
+
+  if (expiryInput) {
+    expiryInput.addEventListener("input", function (event) {
+      event.target.value = event.target.value
+        .replace(/[^\d]/g, "")
+        .replace(/^(\d{2})(\d{1,2})/, "$1/$2")
+        .slice(0, 5);
+    });
+  }
+
+  if (cvcInput) {
+    cvcInput.addEventListener("input", function (event) {
+      event.target.value = event.target.value.replace(/[^\d]/g, "").slice(0, 4);
+    });
+  }
+
+  if (paymentForm && submitBtn) {
+    paymentForm.addEventListener("submit", function () {
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Processing payment...";
+    });
+  }
+</script>
 {% endblock %}

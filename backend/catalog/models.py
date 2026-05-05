@@ -108,6 +108,11 @@ class Product(models.Model):
         default=AvailabilityStatus.YEAR_ROUND,
         help_text="Controls whether customers should see this product.",
     )
+    season_months = models.CharField(
+        max_length=80,
+        blank=True,
+        help_text="Optional season window such as June-August for in-season products.",
+    )
 
     stock_warning_level = models.DecimalField(
         max_digits=10,

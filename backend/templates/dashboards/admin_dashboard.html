@@ -3,92 +3,55 @@
 
 {% block content %}
 <div class="page-shell">
-  <div class="page-header">
+  <div class="page-header admin-dashboard-header">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
       <div>
         <a class="btn btn-back mb-3" href="/">← Back to Home</a>
         <span class="eyebrow">Administration</span>
         <h1 class="page-title mt-2">Admin Dashboard</h1>
-        <p class="page-subtitle">System overview for users, orders, producer sub-orders, and financial tracking.</p>
+        <p class="page-subtitle">User access, recent orders, and platform activity.</p>
       </div>
       <div class="admin-header-actions">
-        <a class="btn btn-primary" href="{% url 'admin_finance_report' %}">Finance Report</a>
+        <a class="btn btn-outline-secondary" href="{% url 'admin_finance_report' %}">Financial Reports</a>
         <a class="btn btn-outline-secondary" href="/shop/">Open Store</a>
       </div>
     </div>
   </div>
 
-  <section class="admin-metric-grid">
-    <div class="metric-card">
-      <div class="metric-label">Total Products</div>
-      <div class="metric-value">{{ total_products }}</div>
+  <section class="section-card dashboard-section admin-summary-board mb-4">
+    <div class="admin-summary-intro">
+      <h2 class="section-title mb-1">Overview</h2>
+      <p class="text-soft mb-0">Current totals from the live database.</p>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Active Products</div>
-      <div class="metric-value">{{ active_products }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Total Orders</div>
-      <div class="metric-value">{{ total_orders }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Customers</div>
-      <div class="metric-value">{{ customers_count }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Producers</div>
-      <div class="metric-value">{{ producers_count }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Admins</div>
-      <div class="metric-value">{{ admins_count }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Tracked Gross Sales</div>
-      <div class="metric-value">£{{ total_gross_sales|floatformat:2 }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Tracked Commission</div>
-      <div class="metric-value">£{{ total_commission|floatformat:2 }}</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Successful Payments</div>
-      <div class="metric-value">{{ payment_success_count }}</div>
-    </div>
-  </section>
-
-  <section class="section-card dashboard-section mb-4">
-    <h2 class="section-title mb-3">Producer List</h2>
-    <p class="text-soft mb-3">All producer accounts for admin visibility.</p>
-    <div class="table-responsive">
-      <table class="table align-middle">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Postcode</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in producer_list %}
-            <tr>
-              <td>{{ p.username }}</td>
-              <td>{{ p.email }}</td>
-              <td>{{ p.postcode_display|default:"—" }}</td>
-            </tr>
-          {% empty %}
-            <tr><td colspan="3" class="text-center text-soft py-4">No producers found.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="admin-summary-grid">
+      <div class="admin-summary-item">
+        <span class="admin-summary-label">Products</span>
+        <strong class="admin-summary-value">{{ total_products }}</strong>
+        <span class="admin-summary-note">{{ active_products }} visible in the marketplace</span>
+      </div>
+      <div class="admin-summary-item">
+        <span class="admin-summary-label">Orders</span>
+        <strong class="admin-summary-value">{{ total_orders }}</strong>
+        <span class="admin-summary-note">Customer orders</span>
+      </div>
+      <div class="admin-summary-item">
+        <span class="admin-summary-label">Customers</span>
+        <strong class="admin-summary-value">{{ customers_count }}</strong>
+        <span class="admin-summary-note">Registered buying accounts</span>
+      </div>
+      <div class="admin-summary-item">
+        <span class="admin-summary-label">Producers</span>
+        <strong class="admin-summary-value">{{ producers_count }}</strong>
+        <span class="admin-summary-note">Producer accounts</span>
+      </div>
     </div>
   </section>
 
   <div class="admin-split-grid">
     <section class="section-card dashboard-section">
       <h2 class="section-title mb-1">Recent Customer Orders</h2>
-      <p class="text-soft mb-3">Latest parent orders across the marketplace.</p>
-      <div class="table-responsive">
+      <p class="text-soft mb-3">Latest marketplace orders.</p>
+      <div class="table-responsive table-scroll">
         <table class="table align-middle">
           <thead>
             <tr>
@@ -115,9 +78,9 @@
     </section>
 
     <section class="section-card dashboard-section">
-      <h2 class="section-title mb-1">Producer Orders</h2>
-      <p class="text-soft mb-3">One sub-order per producer for each parent order.</p>
-      <div class="table-responsive">
+      <h2 class="section-title mb-1">Recent Producer Sub-orders</h2>
+      <p class="text-soft mb-3">Recent supplier sub-orders.</p>
+      <div class="table-responsive table-scroll">
         <table class="table align-middle">
           <thead>
             <tr>

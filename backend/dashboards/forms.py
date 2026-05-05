@@ -50,6 +50,7 @@ class ProducerProductForm(forms.ModelForm):
             "price",
             "stock",
             "availability_status",
+            "season_months",
             "stock_warning_level",
             "allergens",
             "is_surplus",
@@ -66,6 +67,9 @@ class ProducerProductForm(forms.ModelForm):
             "price": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "stock": forms.NumberInput(attrs={"class": "form-control", "min": "0"}),
             "availability_status": forms.Select(attrs={"class": "form-select"}),
+            "season_months": forms.TextInput(
+                attrs={"class": "form-control", "placeholder": "e.g. June-August"}
+            ),
             "stock_warning_level": forms.NumberInput(attrs={"class": "form-control", "min": "0"}),
             "is_surplus": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "surplus_discount_percent": forms.NumberInput(attrs={"class": "form-control", "min": "10", "max": "50"}),
@@ -93,12 +97,17 @@ class ProducerProductForm(forms.ModelForm):
         is_surplus = cleaned_data.get("is_surplus")
         discount = cleaned_data.get("surplus_discount_percent") or 0
         expires_at = cleaned_data.get("surplus_expires_at")
+        availability_status = cleaned_data.get("availability_status")
+        season_months = (cleaned_data.get("season_months") or "").strip()
 
         if is_surplus:
             if discount < 10 or discount > 50:
                 self.add_error("surplus_discount_percent", "Surplus discount must be between 10 and 50.")
             if not expires_at:
                 self.add_error("surplus_expires_at", "Please add an expiry date for the surplus deal.")
+
+        if availability_status == Product.AvailabilityStatus.IN_SEASON and not season_months:
+            self.add_error("season_months", "Please add the season months for in-season products.")
 
         return cleaned_data
 

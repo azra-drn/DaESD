@@ -35,6 +35,29 @@ class MarketplaceSeedAndCatalogueTests(TestCase):
         self.assertTrue(Product.objects.filter(name="Bramley Apples", category__name="Fruit").exists())
         self.assertTrue(Product.objects.filter(name="Fresh Basil", category__name="Herbs").exists())
         self.assertTrue(Product.objects.filter(name="Stoneground Oats", category__name="Pantry").exists())
+        self.assertTrue(Allergen.objects.filter(name="Cereals containing gluten").exists())
+        self.assertTrue(Allergen.objects.filter(name="Tree nuts").exists())
+        self.assertEqual(
+            Allergen.objects.filter(
+                name__in=[
+                    "Celery",
+                    "Cereals containing gluten",
+                    "Crustaceans",
+                    "Eggs",
+                    "Fish",
+                    "Lupin",
+                    "Milk",
+                    "Molluscs",
+                    "Mustard",
+                    "Peanuts",
+                    "Sesame",
+                    "Soybeans",
+                    "Sulphur dioxide / sulphites",
+                    "Tree nuts",
+                ]
+            ).count(),
+            14,
+        )
         self.assertGreaterEqual(Product.objects.filter(category__name="Vegetables").count(), 5)
         self.assertGreaterEqual(Product.objects.filter(category__name="Dairy & Eggs").count(), 3)
         self.assertGreaterEqual(Product.objects.filter(is_organic=True).count(), 5)
@@ -82,7 +105,7 @@ class MarketplaceSeedAndCatalogueTests(TestCase):
         self.assertIn("Fresh Milk", dairy_names)
         self.assertNotIn("Free Range Eggs", dairy_names)
 
-        nuts = Allergen.objects.get(name="Nuts")
+        nuts = Allergen.objects.get(name="Tree nuts")
         exclude_response = self.client.get(reverse("product_list"), {"exclude_allergen": str(nuts.id)})
         excluded_names = {product.name for product in exclude_response.context["products"]}
         self.assertNotIn("Hazelnut Brownies", excluded_names)

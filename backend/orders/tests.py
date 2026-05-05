@@ -312,7 +312,7 @@ class BusinessOrderFlowsTests(TestCase):
         recurring.refresh_from_db()
         self.assertEqual(recurring.status, RecurringOrder.Status.CANCELLED)
 
-    def test_producer_can_accept_and_decline_sub_orders(self):
+    def test_producer_can_progress_sub_order_statuses(self):
         order = Order.objects.create(
             customer=self.community_user,
             status=Order.Status.PENDING,
@@ -331,6 +331,7 @@ class BusinessOrderFlowsTests(TestCase):
         orders_page = self.client.get(reverse("producer_orders"))
         self.assertContains(orders_page, "Accept")
         self.assertContains(orders_page, "Decline")
+        self.assertNotContains(orders_page, "Mark Dispatched")
 
         accept_response = self.client.post(
             reverse("update_producer_order_status", args=[producer_order.id]),
@@ -341,8 +342,44 @@ class BusinessOrderFlowsTests(TestCase):
         producer_order.refresh_from_db()
         self.assertEqual(producer_order.status, ProducerOrder.Status.ACCEPTED)
 
-        producer_order.status = ProducerOrder.Status.PENDING
+        accepted_page = self.client.get(reverse("producer_orders"))
+        self.assertContains(accepted_page, "Mark Dispatched")
+        self.assertContains(accepted_page, "Mark Completed")
+
+        dispatch_response = self.client.post(
+            reverse("update_producer_order_status", args=[producer_order.id]),
+            {"status": "dispatched"},
+            follow=True,
+        )
+        self.assertContains(dispatch_response, "has been marked as dispatched")
+        producer_order.refresh_from_db()
+        self.assertEqual(producer_order.status, ProducerOrder.Status.DISPATCHED)
+
+        complete_response = self.client.post(
+            reverse("update_producer_order_status", args=[producer_order.id]),
+            {"status": "completed"},
+            follow=True,
+        )
+        self.assertContains(complete_response, "has been marked as completed")
+        producer_order.refresh_from_db()
+        self.assertEqual(producer_order.status, ProducerOrder.Status.COMPLETED)
+
+    def test_producer_can_decline_pending_sub_order(self):
+        order = Order.objects.create(
+            customer=self.community_user,
+            status=Order.Status.PENDING,
+            delivery_date=_future_date(5),
+        )
+        OrderItem.objects.create(order=order, product=self.potatoes, quantity=4, unit_price=self.potatoes.price)
+        producer_order = ProducerOrder.objects.create(
+            parent_order=order,
+            producer=self.producer1,
+            status=ProducerOrder.Status.PENDING,
+        )
+        producer_order.recalculate_subtotal()
         producer_order.save()
+
+        self.client.force_login(self.producer1)
         decline_response = self.client.post(
             reverse("update_producer_order_status", args=[producer_order.id]),
             {"status": "cancelled"},
