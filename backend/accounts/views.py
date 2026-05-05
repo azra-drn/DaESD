@@ -2,11 +2,13 @@ import logging
 from datetime import timedelta
 
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 
 from .forms import (
     CustomerRegistrationForm,
@@ -59,8 +61,12 @@ class BrfnLoginView(LoginView):
 
         response = super().form_valid(form)
         if form.cleaned_data.get("remember_me"):
+            self.request.session.pop("ephemeral_session", None)
+            self.request.session.pop("ephemeral_initialized", None)
             self.request.session.set_expiry(60 * 60 * 24 * 14)
         else:
+            self.request.session["ephemeral_session"] = True
+            self.request.session["ephemeral_initialized"] = False
             self.request.session.set_expiry(0)
 
         logger.info("Successful login for username=%s", form.get_user().username)
@@ -108,6 +114,21 @@ class BrfnLogoutView(LogoutView):
         if request.user.is_authenticated:
             logger.info("Logout for username=%s", request.user.username)
         return super().dispatch(request, *args, **kwargs)
+
+
+@login_required
+@require_GET
+def init_ephemeral_session(request):
+    if request.session.get("ephemeral_session"):
+        request.session["ephemeral_initialized"] = True
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_GET
+def expire_ephemeral_session(request):
+    logout(request)
+    return redirect("login")
 
 
 @login_required

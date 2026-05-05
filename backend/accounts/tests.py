@@ -231,6 +231,33 @@ class RoleAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.client.session.get_expire_at_browser_close(), True)
 
+    def test_login_without_remember_me_marks_session_as_ephemeral(self):
+        user = User.objects.create_user(
+            username="sessionuser",
+            email="sessionuser@example.com",
+            password="StrongPass123!",
+            role=User.Role.CUSTOMER,
+        )
+        CustomerProfile.objects.create(user=user, postcode="BS1 5JG")
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "sessionuser", "password": "StrongPass123!"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.client.session.get("ephemeral_session"))
+        self.assertFalse(self.client.session.get("ephemeral_initialized"))
+
+        init_response = self.client.get(reverse("init_ephemeral_session"))
+        self.assertEqual(init_response.status_code, 204)
+        self.assertTrue(self.client.session.get("ephemeral_initialized"))
+
+        expire_response = self.client.get(reverse("expire_ephemeral_session"))
+        self.assertEqual(expire_response.status_code, 302)
+        self.assertRedirects(expire_response, reverse("login"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
     def test_login_lockout_after_repeated_failures(self):
         User.objects.create_user(
             username="lockeduser",
